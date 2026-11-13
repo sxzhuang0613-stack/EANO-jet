@@ -2,7 +2,7 @@
 runtime:
   device: auto
   seed: 3242983479128
-  output_dir: /home/exouser/codes/output/EANO
+  output_dir: /home/exouser/codes/OutPut/EANO
   resume: null
 
 data:

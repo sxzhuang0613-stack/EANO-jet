@@ -805,5 +805,5 @@ class eano(nn.Module):
         prediction['attention'] = attention.reshape(batch, indices.shape[0], 2, 2, 2)
         return prediction
 
-__all__ += ['EANOX', 'CODALayer']
+__all__ += ['eano', 'CODALayer']
 
