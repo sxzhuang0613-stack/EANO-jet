@@ -1,0 +1,108 @@
+# EANOX：保留基础版时空双分支架构，使用带元数据的 NPZ 加载器。
+runtime:
+  device: auto
+  seed: 3242983479128
+  output_dir: /home/exouser/codes/output/EANO
+  resume: null
+
+data:
+  # 兼容模型格式 images；原生 loader 的 cmr 在适配层自动转换。
+  image_key: images
+  # 默认按切片；3D 时每个病例逐切片计算，按全病例切片数平均梯度。
+  dim: 2D
+  batch_size: 1
+  num_workers: 0
+  pin_memory: true
+  # 当前 loader 的增强分支未真正执行空间变换，暂不启用。
+  augmentation: false
+
+sequence:
+  cyclic: true
+  grid_type: periodic
+  window_size: 8
+  overlap: 4
+  # 保留基础版累计复合时的最近邻采样；图像对齐固定使用双线性采样。
+  composition_interpolation: nearest
+
+dataset_name: "acdc"
+dataset_paths: {"acdc": "/home/exouser/datasets/ACDC/database_npz", 
+                }
+# 病例排序后划分，再展开切片，避免同一病例跨集合。
+train_fraction: 0.7
+normalization_epsilon: 0.0001
+
+model:
+  input_size: [128, 128]
+  width: 16
+  lifting_hidden_channels: 128
+  projection_hidden_channels: 128
+  stage_depths: [2, 2, 1]
+  wavelet: db4
+  # 基础版只重建单层子带，因此不接受多层分解。
+  levels: 1
+  transform_type: dwt
+  weight_mode: tucker
+  rank: 0.5
+  channel_mlp_ratio: 0.5
+  coda:
+    temperature: 0.8
+    rank: 0.7
+  postprocess_depth: 1
+  postprocess_rank: 0.7
+  # 空值使用基础版的 (H-1)*0.5；速度即每帧的像素位移。
+  output_scale_pixels: null
+
+losses:
+  # 仅此关键字控制整组切换：wno_base 或 eano。
+  group: wno_base
+  # 基础组支持 fixed 或 uncertainty；eano 组仅支持 fixed。
+  weighting: fixed
+  jacobian_epsilon: 0.0001
+  wno_base:
+    weights:
+      forward_recon_loss: 1.0
+      backward_recon_loss: 1.0
+      forward_lag_recon_loss: 2.0
+      backward_lag_recon_loss: 2.0
+      optical_flow_loss: 0.1
+      hyperelastic_loss: 0.1
+      smoothness_loss: 0.02
+    lambda: 0.60
+    mu: 0.10
+    gn_a: 1.0
+    gn_am: 1.0
+    mechanical_weights:
+      balance: 1.0
+      constitutive: 1.0
+      elastic: 1.0
+    volume_weight: 1.0
+    jacobian_clamp: [0.000000001, 1000.0]
+  eano:
+    # 光度、平衡、本构项取均值；对齐项先平均空间再累加帧对，保留来源归约。
+    weights:
+      photometric: 1.0
+      equilibrium: 1.0
+      constitutive: 1.0
+      alignment_global: 1.0
+      alignment_adjacent: 1.0
+
+training:
+  progress_bar: true  # 进度条
+  epochs: 200
+  optimizer: adamw
+  learning_rate: 0.0005
+  weight_decay: 0.01
+  accumulation_steps: 4
+  gradient_clip_norm: null
+  scheduler: cosine
+  eta_min: 0.000001
+  step_size: 50
+  gamma: 0.5
+  # 训练不运行验证，每轮仅覆盖保存 last.pt。
+
+visualization:
+  enabled: true
+  columns: 6
+  dpi: 120
+  # 小于此像素位移的区域显示纯白；其余颜色用方向表示色相、幅度表示饱和度。
+  white_threshold_pixels: 0.05
